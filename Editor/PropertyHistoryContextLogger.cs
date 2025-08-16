@@ -1,12 +1,10 @@
 using System;
-using UnityEngine;
-using UnityEditor;
+using System.IO;
 using System.Text;
-using System.Text.RegularExpressions;
-using VYaml.Serialization;
+using UnityEditor;
+using UnityEditor.SceneManagement;
+using UnityEngine;
 using Object = UnityEngine.Object;
-using System.Collections.Generic;
-using System.Linq;
 using Debug = UnityEngine.Debug;
 
 [InitializeOnLoad]
@@ -16,20 +14,13 @@ public static class PropertyHistoryContextLogger
     private static void Initialize()
     {
         EditorApplication.contextualPropertyMenu += OnPropertyContextMenu;
-        YamlSerializer.DefaultOptions = new YamlSerializerOptions
-        {
-            Resolver = CompositeResolver.Create(new IYamlFormatterResolver[]
-            {
-                StandardResolver.Instance,
-                UnityResolver.Instance,
-            })
-        };
     }
 
     private static void OnPropertyContextMenu(GenericMenu menu, SerializedProperty property)
     {
         var propertyCopy = property.Copy();
-        menu.AddItem(new GUIContent("Show Property Git History (Last Commit)"), false, () => {
+        menu.AddItem(new GUIContent("Show Property Git History (Last Commit)"), false, () =>
+        {
             ShowPropertyHistory(propertyCopy);
         });
     }
@@ -46,11 +37,14 @@ public static class PropertyHistoryContextLogger
             return;
         }
 
-        if (!AssetDatabase.TryGetGUIDAndLocalFileIdentifier(targetObject, out _, out long fileID))
+        GlobalObjectId globalId = GlobalObjectId.GetGlobalObjectIdSlow(targetObject);
+        if (globalId.identifierType != 2) // 2 = Asset-based object
         {
-            Debug.LogWarning($"Could not get File ID for object '{targetObject.name}'.");
+            Debug.LogWarning($"Could not get File ID for object '{targetObject.name}'. Object is not a persistent asset.");
             return;
         }
+
+        long fileID = (long)globalId.targetObjectId;
 
         if (targetObject is AssetImporter)
         {
@@ -77,9 +71,9 @@ public static class PropertyHistoryContextLogger
         string gitShowArgs = $"show {commitHash}:\"{assetPath}\"";
         string fileContent = GitUtils.RunGitCommand(gitShowArgs);
 
-        var historicalValue = ComplexParseYaml(fileContent, property, fileID);
+        var historicalValue = ExtractOldValue(fileContent, property, fileID);
 
-        logMessage.AppendLine($"--- Git History for {property.displayName} ---");
+        logMessage.AppendLine($"--- Git History for {property.propertyPath} ---");
         logMessage.AppendLine($"<b>Asset Path:</b> {assetPath}");
         logMessage.AppendLine($"<b>Commit:</b> {commitHash.Substring(0, 7)}");
         logMessage.AppendLine($"<b>Author:</b> {author}");
@@ -90,102 +84,177 @@ public static class PropertyHistoryContextLogger
         Debug.Log(logMessage.ToString());
     }
 
-    // --- THIS IS THE CORRECTED METHOD ---
-    private static string ComplexParseYaml(string fileContent, SerializedProperty property, long fileID)
+    private static object ExtractOldValue(string fileContent, SerializedProperty property, long localId)
     {
-        var fileIdString = $"&{fileID}";
-        var documents = fileContent.Split(new[] { "---" }, StringSplitOptions.RemoveEmptyEntries);
-        string targetDocument = documents.FirstOrDefault(doc => doc.Contains(fileIdString));
+        // WARNING: This is risky. It can have side-effects on the editor, is slow,
+        // and may fail if the temporary asset cannot be loaded correctly.
 
-        // if (targetDocument == null)
-        // {
-            // return "<i>Object not found in historical commit. It may have been added more recently.</i>";
-        // }
+        const string tempDir = "Assets/PropertyHistoryTemp";
+        if (!Directory.Exists(tempDir))
+        {
+            Directory.CreateDirectory(tempDir);
+        }
+
+        string tempAssetPath = Path.Combine(tempDir, Guid.NewGuid() + ".asset");
 
         try
         {
-            byte[] fileBytes = Encoding.UTF8.GetBytes(targetDocument);
-            // Deserialize to a generic object first
-            var deserializedData = YamlSerializer.Deserialize<object>(fileBytes);
+            File.WriteAllText(tempAssetPath, fileContent);
+            AssetDatabase.ImportAsset(tempAssetPath, ImportAssetOptions.ForceSynchronousImport);
 
-            // Now, check if the deserialized data is a dictionary, and cast it.
-            if (deserializedData is IDictionary<object, object> docDict)
+            Object[] allAssets = AssetDatabase.LoadAllAssetsAtPath(tempAssetPath);
+            if (allAssets == null || allAssets.Length == 0)
             {
-                // The actual properties are typically nested under a key matching the object's type name.
-                if (docDict.TryGetValue(property.serializedObject.targetObject.GetType().Name, out var rootObject))
-                {
-                    var foundValue = FindValueInDeserializedObject(rootObject, property.propertyPath);
-                    return foundValue != null ? foundValue.ToString() : "<i>Property not found at this commit.</i>";
-                }
-                return "<i>Could not find root object type in YAML document.</i>";
+                Debug.LogWarning("Could not load any assets from the temporary historical file.");
+                return "[Could not load historical asset]";
             }
-            return "<i>Unexpected YAML structure (root is not a mapping).</i>";
+
+            Object targetObject = null;
+            foreach (var asset in allAssets)
+            {
+                // Important: Some objects in an asset file can be null (e.g. missing references)
+                if (asset != null && AssetDatabase.TryGetGUIDAndLocalFileIdentifier(asset, out _, out long fileID))
+                {
+                    if (fileID == localId)
+                    {
+                        targetObject = asset;
+                        break;
+                    }
+                }
+            }
+
+            if (targetObject == null)
+            {
+                // Fallback for objects that might not be directly identifiable, like GameObjects in a scene.
+                // This is less reliable and might pick the wrong object if multiple have the same name.
+                // targetObject = allAssets[0];
+                // Debug.LogWarning($"Could not find object with File ID {localId}. Falling back to the first object in the asset: {targetObject.name}. This may not be the correct object.");
+                Debug.LogWarning($"Could not find object with File ID {localId} in historical asset. Ensure the object exists in the historical file.");
+
+                return "[Object not found in historical asset]";
+            }
+
+            SerializedObject historicalObject = new SerializedObject(targetObject);
+            SerializedProperty historicalProperty = historicalObject.FindProperty(property.propertyPath);
+
+            if (historicalProperty == null)
+            {
+                return "[Property not found in historical object]";
+            }
+            return GetPropertyValue(historicalProperty);
         }
         catch (Exception e)
         {
-            return $"<i>Failed to parse YAML: {e.Message}</i>";
+            Debug.LogError($"Failed to extract old value via SerializedObject: {e.Message}");
+            return "[Error during extraction]";
+        }
+        finally
+        {
+            AssetDatabase.DeleteAsset(tempAssetPath);
         }
     }
 
-    // --- THIS METHOD IS UPDATED TO USE IDictionary FOR BETTER PRACTICE ---
-    private static object FindValueInDeserializedObject(object currentObject, string propertyPath)
+    private static object GetPropertyValue(SerializedProperty prop)
     {
-        var pathParts = propertyPath.Split('.');
-        
-        foreach (var part in pathParts)
+        switch (prop.propertyType)
         {
-            if (currentObject == null) return null;
-
-            var arrayMatch = Regex.Match(part, @"(\w+)\[(\d+)\]");
-            if (arrayMatch.Success)
-            {
-                string collectionName = arrayMatch.Groups[1].Value;
-                int index = int.Parse(arrayMatch.Groups[2].Value);
-                
-                if (currentObject is IDictionary<object, object> dict && dict.TryGetValue(collectionName, out var collectionObj))
-                {
-                    if (collectionObj is IList<object> list && index < list.Count)
-                    {
-                        currentObject = list[index];
-                    }
-                    else return null; 
-                }
-                else return null;
-            }
-            else
-            {
-                if (part == "Array" && currentObject is IDictionary<object, object>)
-                {
-                    // Skip the "Array" part of a path like "m_MyArray.Array.data[0]"
-                    continue;
-                }
-                if (currentObject is IDictionary<object, object> dict && dict.TryGetValue(part, out var nextObject))
-                {
-                    currentObject = nextObject;
-                }
-                else return null;
-            }
+            case SerializedPropertyType.Integer:
+                return prop.intValue;
+            case SerializedPropertyType.Boolean:
+                return prop.boolValue;
+            case SerializedPropertyType.Float:
+                return prop.floatValue;
+            case SerializedPropertyType.String:
+                return prop.stringValue;
+            case SerializedPropertyType.Color:
+                return prop.colorValue;
+            case SerializedPropertyType.ObjectReference:
+                return prop.objectReferenceValue;
+            case SerializedPropertyType.LayerMask:
+                return prop.intValue;
+            case SerializedPropertyType.Enum:
+                return prop.enumDisplayNames[prop.enumValueIndex];
+            case SerializedPropertyType.Vector2:
+                return prop.vector2Value;
+            case SerializedPropertyType.Vector3:
+                return prop.vector3Value;
+            case SerializedPropertyType.Vector4:
+                return prop.vector4Value;
+            case SerializedPropertyType.Rect:
+                return prop.rectValue;
+            case SerializedPropertyType.ArraySize:
+                return prop.arraySize;
+            case SerializedPropertyType.Character:
+                return (char)prop.intValue;
+            case SerializedPropertyType.AnimationCurve:
+                return prop.animationCurveValue;
+            case SerializedPropertyType.Bounds:
+                return prop.boundsValue;
+            case SerializedPropertyType.Quaternion:
+                return prop.quaternionValue;
+            case SerializedPropertyType.ExposedReference:
+                return prop.exposedReferenceValue;
+            case SerializedPropertyType.FixedBufferSize:
+                return prop.fixedBufferSize;
+            case SerializedPropertyType.Vector2Int:
+                return prop.vector2IntValue;
+            case SerializedPropertyType.Vector3Int:
+                return prop.vector3IntValue;
+            case SerializedPropertyType.RectInt:
+                return prop.rectIntValue;
+            case SerializedPropertyType.BoundsInt:
+                return prop.boundsIntValue;
+            case SerializedPropertyType.ManagedReference:
+                return prop.managedReferenceValue;
+            case SerializedPropertyType.Hash128:
+                return prop.hash128Value;
+            case SerializedPropertyType.Generic:
+                // For generic properties, we can return the serialized property itself for further inspection.
+                // This is useful for complex types like lists or custom classes.
+                return prop.serializedObject.targetObject; // Return the whole object for further inspection.
+            default:
+                return $"[{prop.propertyType.ToString()} not supported]";
         }
-        return currentObject;
     }
 
     private static string GetAssetPath(Object obj)
     {
+        // First, try the most direct method to get an asset path. This works for assets in the Project window.
         string path = AssetDatabase.GetAssetPath(obj);
         if (!string.IsNullOrEmpty(path))
         {
             return path;
         }
 
-        if (obj is Component component)
+        // If the object is a component, it might be in a scene or in the prefab editor.
+        if (obj is not Component component)
         {
-            GameObject go = component.gameObject;
-            string prefabPath = PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(go);
-            if (!string.IsNullOrEmpty(prefabPath)) return prefabPath;
-            
-            if (go.scene.path != null && !string.IsNullOrEmpty(go.scene.path)) return go.scene.path;
+            return null;
         }
-        
+
+        GameObject go = component.gameObject;
+
+        // Check if we are in Prefab Stage (i.e., editing a prefab asset directly).
+        var prefabStage = PrefabStageUtility.GetPrefabStage(go);
+        if (prefabStage != null && !string.IsNullOrEmpty(prefabStage.assetPath))
+        {
+            return prefabStage.assetPath;
+        }
+
+        // Check if it's an instance of a prefab in a scene.
+        string prefabPath = PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(go);
+        if (!string.IsNullOrEmpty(prefabPath))
+        {
+            return prefabPath;
+        }
+
+        // If it's not a prefab, it might be a regular object in a saved scene.
+        if (go.scene.path != null && !string.IsNullOrEmpty(go.scene.path))
+        {
+            return go.scene.path;
+        }
+
+        // If all checks fail, we cannot determine the asset path.
         return null;
     }
 }
