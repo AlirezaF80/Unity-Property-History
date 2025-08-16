@@ -19,7 +19,7 @@ public static class PropertyHistoryContextLogger
     private static void OnPropertyContextMenu(GenericMenu menu, SerializedProperty property)
     {
         var propertyCopy = property.Copy();
-        menu.AddItem(new GUIContent("Show Property Git History (Last Commit)"), false, () =>
+        menu.AddItem(new GUIContent("Show Full Property Git History"), false, () =>
         {
             ShowPropertyHistory(propertyCopy);
         });
@@ -51,10 +51,10 @@ public static class PropertyHistoryContextLogger
             assetPath += ".meta";
         }
 
-        string gitLogArgs = $"log -1 --pretty=format:\"%H|%an|%s\" -- \"{assetPath}\"";
-        string commitInfo = GitUtils.RunGitCommand(gitLogArgs);
+        string gitLogArgs = $"log --pretty=format:\"%H|%an|%s\" -- \"{assetPath}\"";
+        string allCommitsInfo = GitUtils.RunGitCommand(gitLogArgs);
 
-        if (string.IsNullOrEmpty(commitInfo) || commitInfo.Contains("fatal:"))
+        if (string.IsNullOrEmpty(allCommitsInfo) || allCommitsInfo.Contains("fatal:"))
         {
             logMessage.AppendLine($"--- Git History for {property.displayName} ---");
             logMessage.AppendLine($"<b>Asset Path:</b> {assetPath}");
@@ -62,24 +62,52 @@ public static class PropertyHistoryContextLogger
             Debug.Log(logMessage.ToString());
             return;
         }
-
-        string[] parts = commitInfo.Split('|');
-        string commitHash = parts[0];
-        string author = parts[1];
-        string message = parts[2];
-
-        string gitShowArgs = $"show {commitHash}:\"{assetPath}\"";
-        string fileContent = GitUtils.RunGitCommand(gitShowArgs);
-
-        var historicalValue = ExtractOldValue(fileContent, property, fileID);
+        
+        string[] commitLines = allCommitsInfo.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
 
         logMessage.AppendLine($"--- Git History for {property.propertyPath} ---");
         logMessage.AppendLine($"<b>Asset Path:</b> {assetPath}");
-        logMessage.AppendLine($"<b>Commit:</b> {commitHash.Substring(0, 7)}");
-        logMessage.AppendLine($"<b>Author:</b> {author}");
-        logMessage.AppendLine($"<b>Message:</b> {message}");
-        logMessage.AppendLine($"<b>Value at Commit:</b> {historicalValue}");
         logMessage.AppendLine("-----------------------------------------");
+
+        object previousValue = null;
+        int changesFound = 0;
+
+        foreach (var commitLine in commitLines)
+        {
+            string[] parts = commitLine.Split('|');
+            if (parts.Length < 3) continue;
+
+            string commitHash = parts[0];
+            string author = parts[1];
+            string message = parts[2];
+
+            string gitShowArgs = $"show {commitHash}:\"{assetPath}\"";
+            string fileContent = GitUtils.RunGitCommand(gitShowArgs);
+
+            if (string.IsNullOrEmpty(fileContent))
+            {
+                continue;
+            }
+
+            var currentValue = ExtractOldValue(fileContent, property, fileID);
+
+            if (changesFound == 0 || !Equals(currentValue, previousValue))
+            {
+                logMessage.AppendLine($"<b>Commit:</b> {commitHash.Substring(0, 7)}");
+                logMessage.AppendLine($"<b>Author:</b> {author}");
+                logMessage.AppendLine($"<b>Message:</b> {message}");
+                logMessage.AppendLine($"<b>Value:</b> {currentValue ?? "[null]"}");
+                logMessage.AppendLine("-----------------------------------------");
+
+                previousValue = currentValue;
+                changesFound++;
+            }
+        }
+
+        if (changesFound == 0)
+        {
+            logMessage.AppendLine("<b>No changes found for this property in the file's history.</b>");
+        }
 
         Debug.Log(logMessage.ToString());
     }
