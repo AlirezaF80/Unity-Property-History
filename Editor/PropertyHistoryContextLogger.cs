@@ -37,21 +37,52 @@ public static class PropertyHistoryContextLogger
             return;
         }
 
-        GlobalObjectId globalId = GlobalObjectId.GetGlobalObjectIdSlow(targetObject);
-        if (globalId.identifierType != 2) // 2 = Asset-based object
+        long fileID = 0;
+        bool fileIdFound = false;
+
+        // Determine the correct object to get the File ID from.
+        // If it's a prefab instance, we need the source asset.
+        Object objectForFileId = targetObject;
+        if (PrefabUtility.IsPartOfPrefabInstance(targetObject))
+        {
+            objectForFileId = PrefabUtility.GetCorrespondingObjectFromSource(targetObject);
+        }
+
+        // If we have a valid object (either the original or the prefab source), try to get its ID.
+        if (objectForFileId != null && AssetDatabase.TryGetGUIDAndLocalFileIdentifier(objectForFileId, out _, out fileID))
+        {
+            fileIdFound = true;
+        }
+        // If that fails, it might be because we are in the prefab editor (Prefab Stage).
+        else
+        {
+            GameObject go = null;
+            if (targetObject is Component c) go = c.gameObject;
+            else if (targetObject is GameObject g) go = g;
+
+            if (go != null && PrefabStageUtility.GetPrefabStage(go) != null)
+            {
+                var globalId = GlobalObjectId.GetGlobalObjectIdSlow(targetObject);
+                if (globalId.identifierType == 2)
+                {
+                    fileID = (long)globalId.targetObjectId;
+                    fileIdFound = true;
+                }
+            }
+        }
+
+        if (!fileIdFound)
         {
             Debug.LogWarning($"Could not get File ID for object '{targetObject.name}'. Object is not a persistent asset.");
             return;
         }
-
-        long fileID = (long)globalId.targetObjectId;
 
         if (targetObject is AssetImporter)
         {
             assetPath += ".meta";
         }
 
-        string gitLogArgs = $"log --pretty=format:\"%H|%an|%s\" -- \"{assetPath}\"";
+        string gitLogArgs = $"log --pretty=format:\"%H|%an|%s\" -- \"{assetPath}\"" ;
         string allCommitsInfo = GitUtils.RunGitCommand(gitLogArgs);
 
         if (string.IsNullOrEmpty(allCommitsInfo) || allCommitsInfo.Contains("fatal:"))
@@ -81,7 +112,7 @@ public static class PropertyHistoryContextLogger
             string author = parts[1];
             string message = parts[2];
 
-            string gitShowArgs = $"show {commitHash}:\"{assetPath}\"";
+            string gitShowArgs = $"show {commitHash}:\"{assetPath}\"" ;
             string fileContent = GitUtils.RunGitCommand(gitShowArgs);
 
             if (string.IsNullOrEmpty(fileContent))
