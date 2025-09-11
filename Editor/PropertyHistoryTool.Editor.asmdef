@@ -1,16 +1,16 @@
 {
     "name": "PropertyHistoryTool.Editor",
     "rootNamespace": "",
-    "references": [
-        "GUID:bef05a7048ad4e058392772fb446b3d9"
-    ],
+    "references": [],
     "includePlatforms": [
         "Editor"
     ],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
-    "overrideReferences": false,
-    "precompiledReferences": [],
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "YamlDotNet.dll"
+    ],
     "autoReferenced": true,
     "defineConstraints": [],
     "versionDefines": [],
