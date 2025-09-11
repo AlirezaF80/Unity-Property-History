@@ -53,21 +53,14 @@ public static class PropertyHistoryContextLogger
         {
             fileIdFound = true;
         }
-        // If that fails, it might be because we are in the prefab editor (Prefab Stage).
+        // If that fails, it might be a scene object or we are in the prefab editor (Prefab Stage).
         else
         {
-            GameObject go = null;
-            if (targetObject is Component c) go = c.gameObject;
-            else if (targetObject is GameObject g) go = g;
-
-            if (go != null && PrefabStageUtility.GetPrefabStage(go) != null)
+            var globalId = GlobalObjectId.GetGlobalObjectIdSlow(targetObject);
+            if (globalId.identifierType == 1 || globalId.identifierType == 2)
             {
-                var globalId = GlobalObjectId.GetGlobalObjectIdSlow(targetObject);
-                if (globalId.identifierType == 2)
-                {
-                    fileID = (long)globalId.targetObjectId;
-                    fileIdFound = true;
-                }
+                fileID = (long)globalId.targetObjectId;
+                fileIdFound = true;
             }
         }
 
