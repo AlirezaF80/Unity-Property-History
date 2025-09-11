@@ -46,18 +46,16 @@ public static class PropertyHistoryContextLogger
         if (PrefabUtility.IsPartOfPrefabInstance(targetObject))
         {
             objectForFileId = PrefabUtility.GetCorrespondingObjectFromSource(targetObject);
+            // If we have a valid object (either the original or the prefab source), try to get its ID.
+            if (objectForFileId != null && AssetDatabase.TryGetGUIDAndLocalFileIdentifier(objectForFileId, out _, out fileID))
+                fileIdFound = true;
         }
 
-        // If we have a valid object (either the original or the prefab source), try to get its ID.
-        if (objectForFileId != null && AssetDatabase.TryGetGUIDAndLocalFileIdentifier(objectForFileId, out _, out fileID))
-        {
-            fileIdFound = true;
-        }
         // If that fails, it might be a scene object or we are in the prefab editor (Prefab Stage).
-        else
+        if (!fileIdFound)
         {
             var globalId = GlobalObjectId.GetGlobalObjectIdSlow(targetObject);
-            if (globalId.identifierType == 1 || globalId.identifierType == 2)
+            if (globalId.identifierType is (int)GlobalObjectIdType.ImportedAsset or (int)GlobalObjectIdType.SceneObject)
             {
                 fileID = (long)globalId.targetObjectId;
                 fileIdFound = true;
@@ -70,6 +68,7 @@ public static class PropertyHistoryContextLogger
             return;
         }
 
+        // TODO: Can use global object id type instead
         if (targetObject is AssetImporter)
         {
             assetPath += ".meta";
@@ -176,5 +175,13 @@ public static class PropertyHistoryContextLogger
 
         // If all checks fail, we cannot determine the asset path.
         return null;
+    }
+    
+    private enum GlobalObjectIdType
+    {
+        Null = 0,
+        ImportedAsset = 1,
+        SceneObject = 2,
+        SourceAsset = 3,
     }
 }
