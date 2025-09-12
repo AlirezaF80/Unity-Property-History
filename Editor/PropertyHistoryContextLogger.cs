@@ -35,36 +35,6 @@ public static class PropertyHistoryContextLogger
             return;
         }
 
-        long fileID = 0;
-        bool fileIdFound = false;
-
-        // Determine the correct object to get the File ID from.
-        // If it's a prefab instance, we need the source asset.
-        if (PrefabUtility.IsPartOfPrefabInstance(targetObject))
-        {
-            var objectForFileId = PrefabUtility.GetCorrespondingObjectFromSource(targetObject);
-            // If we have a valid object (either the original or the prefab source), try to get its ID.
-            if (objectForFileId != null && AssetDatabase.TryGetGUIDAndLocalFileIdentifier(objectForFileId, out _, out fileID))
-                fileIdFound = true;
-        }
-
-        // If that fails, it might be a scene object or we are in the prefab editor (Prefab Stage).
-        if (!fileIdFound)
-        {
-            var globalId = GlobalObjectId.GetGlobalObjectIdSlow(targetObject);
-            if (globalId.identifierType is (int)GlobalObjectIdType.ImportedAsset or (int)GlobalObjectIdType.SceneObject)
-            {
-                fileID = (long)globalId.targetObjectId;
-                fileIdFound = true;
-            }
-        }
-
-        if (!fileIdFound)
-        {
-            Debug.LogWarning($"Could not get File ID for object '{targetObject.name}'. Object is not a persistent asset.");
-            return;
-        }
-
         // TODO: If is asset importer, we need to adjust the asset path to point to the actual asset file.
         if (targetObject is AssetImporter importer)
         {
@@ -73,7 +43,13 @@ public static class PropertyHistoryContextLogger
             return;
         }
 
-        Debug.Log($"[PropertyHistory] AssetPath: {assetPath}, FileID: {fileID}, Is AssetImporter: {targetObject is AssetImporter}, PropertyPath: {property.propertyPath}");
+        if (!TryGetFileID(targetObject, out long fileID))
+        {
+            Debug.LogWarning($"Could not get File ID for object '{targetObject.name}'. Object is not a persistent asset.");
+            return;
+        }
+
+        Debug.Log($"[PropertyHistory] AssetPath: {assetPath}, FileID: {fileID}, PropertyPath: {property.propertyPath}");
 
         string gitLogArgs = $"log --pretty=format:\"%H|%an|%s\" -- \"{assetPath}\"" ;
         string allCommitsInfo = GitUtils.RunGitCommand(gitLogArgs);
@@ -135,6 +111,35 @@ public static class PropertyHistoryContextLogger
         }
 
         Debug.Log(logMessage.ToString());
+    }
+
+    private static bool TryGetFileID(Object targetObject, out long fileID)
+    {
+        fileID = 0;
+        bool fileIdFound = false;
+
+        // Determine the correct object to get the File ID from.
+        // If it's a prefab instance, we need the source asset.
+        if (PrefabUtility.IsPartOfPrefabInstance(targetObject))
+        {
+            var objectForFileId = PrefabUtility.GetCorrespondingObjectFromSource(targetObject);
+            // If we have a valid object (either the original or the prefab source), try to get its ID.
+            if (objectForFileId != null && AssetDatabase.TryGetGUIDAndLocalFileIdentifier(objectForFileId, out _, out fileID))
+                fileIdFound = true;
+        }
+
+        // If that fails, it might be a scene object, or we are in the prefab editor (Prefab Stage).
+        if (!fileIdFound)
+        {
+            var globalId = GlobalObjectId.GetGlobalObjectIdSlow(targetObject);
+            if (globalId.identifierType is (int)GlobalObjectIdType.ImportedAsset or (int)GlobalObjectIdType.SceneObject)
+            {
+                fileID = (long)globalId.targetObjectId;
+                fileIdFound = true;
+            }
+        }
+
+        return fileIdFound;
     }
 
     private static string GetAssetPath(Object obj)
