@@ -1,11 +1,9 @@
 using System;
-using System.IO;
 using System.Text;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using Object = UnityEngine.Object;
-using Debug = UnityEngine.Debug;
 
 [InitializeOnLoad]
 public static class PropertyHistoryContextLogger
@@ -42,10 +40,9 @@ public static class PropertyHistoryContextLogger
 
         // Determine the correct object to get the File ID from.
         // If it's a prefab instance, we need the source asset.
-        Object objectForFileId = targetObject;
         if (PrefabUtility.IsPartOfPrefabInstance(targetObject))
         {
-            objectForFileId = PrefabUtility.GetCorrespondingObjectFromSource(targetObject);
+            var objectForFileId = PrefabUtility.GetCorrespondingObjectFromSource(targetObject);
             // If we have a valid object (either the original or the prefab source), try to get its ID.
             if (objectForFileId != null && AssetDatabase.TryGetGUIDAndLocalFileIdentifier(objectForFileId, out _, out fileID))
                 fileIdFound = true;
@@ -68,11 +65,15 @@ public static class PropertyHistoryContextLogger
             return;
         }
 
-        // TODO: Can use global object id type instead
-        if (targetObject is AssetImporter)
+        // TODO: If is asset importer, we need to adjust the asset path to point to the actual asset file.
+        if (targetObject is AssetImporter importer)
         {
-            assetPath += ".meta";
+            // assetPath += ".meta";
+            Debug.LogWarning("AssetImporter detected. Full property history for AssetImporters is not yet supported.");
+            return;
         }
+
+        Debug.Log($"[PropertyHistory] AssetPath: {assetPath}, FileID: {fileID}, Is AssetImporter: {targetObject is AssetImporter}, PropertyPath: {property.propertyPath}");
 
         string gitLogArgs = $"log --pretty=format:\"%H|%an|%s\" -- \"{assetPath}\"" ;
         string allCommitsInfo = GitUtils.RunGitCommand(gitLogArgs);

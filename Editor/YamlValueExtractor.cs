@@ -2,8 +2,8 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Text;
+using UnityEngine;
 using YamlDotNet.RepresentationModel;
-using YamlDotNet.Core;
 
 public static class YamlValueExtractor
 {
@@ -11,6 +11,7 @@ public static class YamlValueExtractor
     {
         try
         {
+            Debug.Log($"[PropertyHistory] Extracting from file with LocalID: {localId}, PropertyPath: {propertyPath}");
             var yaml = new YamlStream();
             yaml.Load(new StringReader(fileContent));
 
