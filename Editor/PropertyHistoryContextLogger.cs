@@ -89,7 +89,7 @@ public static class PropertyHistoryContextLogger
                 continue;
             }
 
-            // var currentValue = ImportedAssetValueExtractor.ExtractOldValue(fileContent, property, fileID);
+            // TODO: refactor this to exit early if value isn't found in the commit
             var currentValue = YamlValueExtractor.ExtractPropertyValue(fileContent, fileID, property.propertyPath);
 
             if (changesFound == 0 || !Equals(currentValue, previousValue))
