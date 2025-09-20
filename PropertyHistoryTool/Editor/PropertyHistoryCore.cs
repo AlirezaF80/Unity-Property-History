@@ -167,8 +167,8 @@ namespace PropertyHistoryTool
 
             if (propertyData.TargetObject is AssetImporter)
             {
+                throw new NotImplementedException("AssetImporter support is not implemented yet.");
                 // TODO: Support for AssetImporter
-                return false;
             }
 
             if (!TryGetFileID(propertyData.TargetObject, out long fileID))
