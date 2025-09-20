@@ -1,43 +1,47 @@
 using System.Diagnostics;
 using UnityEngine;
 
-public static class GitUtils
+namespace PropertyHistoryTool
 {
-    /// <summary>
-    /// Runs a Git command and returns its standard output.
-    /// </summary>
-    /// <param name="arguments">The arguments to pass to git.exe.</param>
-    /// <returns>The output from the command, or an error message.</returns>
-    public static string RunGitCommand(string arguments)
+    public static class GitUtils
     {
-        using (Process process = new Process())
+        /// <summary>
+        /// Runs a Git command and returns its standard output.
+        /// </summary>
+        /// <param name="arguments">The arguments to pass to git.exe.</param>
+        /// <returns>The output from the command, or an error message.</returns>
+        public static string RunGitCommand(string arguments)
         {
-            process.StartInfo.FileName = "git"; // Assumes git is in the system's PATH
-            process.StartInfo.Arguments = arguments;
-            process.StartInfo.UseShellExecute = false;
-            process.StartInfo.RedirectStandardOutput = true;
-            process.StartInfo.RedirectStandardError = true;
-            process.StartInfo.CreateNoWindow = true;
-            
-            // Set the working directory to the Unity Project root
-            process.StartInfo.WorkingDirectory = Application.dataPath.Replace("/Assets", "");
-
-            try
+            using (Process process = new Process())
             {
-                process.Start();
-                string output = process.StandardOutput.ReadToEnd();
-                string error = process.StandardError.ReadToEnd();
-                process.WaitForExit();
+                process.StartInfo.FileName = "git"; // Assumes git is in the system's PATH
+                process.StartInfo.Arguments = arguments;
+                process.StartInfo.UseShellExecute = false;
+                process.StartInfo.RedirectStandardOutput = true;
+                process.StartInfo.RedirectStandardError = true;
+                process.StartInfo.CreateNoWindow = true;
 
-                if (!string.IsNullOrEmpty(error))
+                // Set the working directory to the Unity Project root
+                process.StartInfo.WorkingDirectory = Application.dataPath.Replace("/Assets", "");
+
+                try
                 {
-                    return error;
+                    process.Start();
+                    string output = process.StandardOutput.ReadToEnd();
+                    string error = process.StandardError.ReadToEnd();
+                    process.WaitForExit();
+
+                    if (!string.IsNullOrEmpty(error))
+                    {
+                        return error;
+                    }
+
+                    return output.Trim();
                 }
-                return output.Trim();
-            }
-            catch (System.Exception e)
-            {
-                return $"Error executing git command: {e.Message}";
+                catch (System.Exception e)
+                {
+                    return $"Error executing git command: {e.Message}";
+                }
             }
         }
     }

@@ -1,9 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using UnityEditor;
 using UnityEngine;
-using PropertyHistoryTool;
 
 namespace PropertyHistoryTool
 {
@@ -237,7 +235,7 @@ namespace PropertyHistoryTool
         private void LoadPropertyFromSelection()
         {
             // Try to get the active property from the Inspector
-            var activeEditor = EditorWindow.focusedWindow;
+            var activeEditor = focusedWindow;
             if (activeEditor == null || activeEditor.GetType().Name != "InspectorWindow")
             {
                 errorMessage = "Please select a property in the Inspector first.";
