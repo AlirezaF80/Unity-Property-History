@@ -25,7 +25,7 @@ You can install this tool via the Unity Package Manager using a Git URL:
 2.  Click the **"+"** button in the top-left corner.
 3.  Select **"Add package from git URL..."**.
 4.  Enter the following URL and click **"Add"**:
-    `https://github.com/alirezaf80/unity-property-history.git`
+    `https://github.com/alirezaf80/unity-property-history.git?path=PropertyHistoryTool/`
 
 ## How to Use
 
