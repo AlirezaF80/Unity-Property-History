@@ -1,0 +1,26 @@
+{
+  "name": "com.alirezaf80.property-history",
+  "version": "0.1.0",
+  "displayName": "Property History Tool",
+  "description": "An editor tool for Unity that allows you to view the Git history of component properties or asset fields directly within the inspector.",
+  "unity": "2021.3",
+  "author": {
+    "name": "Alireza Farzaneh",
+    "email": "alirezafarzaneh138@gmail.com",
+    "url": "https://github.com/alirezaf80"
+  },
+  "license": "MIT",
+  "keywords": [
+    "git",
+    "history",
+    "property",
+    "inspector",
+    "version control",
+    "tool"
+  ],
+  "dependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/alirezaf80/unity-property-history.git"
+  }
+}
