@@ -1,6 +1,6 @@
 # Unity Property History Tool
 
-![Property History Window](https://user-images.githubusercontent.com/AlirezaF80/Unity-Property-History/Preview.png)
+![Property History Window](https://raw.githubusercontent.com/AlirezaF80/Unity-Property-History/refs/heads/main/Preview.png)
 
 A Unity editor tool that allows you to view the Git history of component properties or asset fields directly within the inspector. Track down when a value changed, who changed it, and why, without leaving the Unity Editor. 
 
