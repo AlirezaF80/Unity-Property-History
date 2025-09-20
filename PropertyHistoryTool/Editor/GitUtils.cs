@@ -1,10 +1,23 @@
 using System.Diagnostics;
 using UnityEngine;
+using Debug = UnityEngine.Debug;
 
 namespace PropertyHistoryTool
 {
     public static class GitUtils
     {
+        public static bool IsGitInstalled()
+        {
+            string versionOutput = RunGitCommand("--version");
+            return !string.IsNullOrEmpty(versionOutput) && versionOutput.StartsWith("git version");
+        }
+
+        public static bool IsGitRepository()
+        {
+            string repoCheckOutput = RunGitCommand("rev-parse --is-inside-work-tree");
+            return repoCheckOutput.Trim() == "true";
+        }
+
         /// <summary>
         /// Runs a Git command and returns its standard output.
         /// </summary>
@@ -34,6 +47,11 @@ namespace PropertyHistoryTool
                     if (!string.IsNullOrEmpty(error))
                     {
                         return error;
+                    }
+
+                    if (process.ExitCode != 0)
+                    {
+                        return $"Git command exited with code {process.ExitCode}: {error}";
                     }
 
                     return output.Trim();

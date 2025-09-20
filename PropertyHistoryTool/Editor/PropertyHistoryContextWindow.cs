@@ -1,8 +1,5 @@
-using System.Collections.Generic;
-using System.Text;
 using UnityEditor;
 using UnityEngine;
-using PropertyHistoryTool;
 
 namespace PropertyHistoryTool
 {
@@ -18,9 +15,14 @@ namespace PropertyHistoryTool
         private static void OnPropertyContextMenu(GenericMenu menu, SerializedProperty property)
         {
             var propertyCopy = property.Copy();
-            menu.AddItem(new GUIContent("Show Property History in Window"), false, () =>
+            menu.AddItem(new GUIContent("Show Property History Window"), false, () =>
             {
-                ShowPropertyHistoryInWindow(propertyCopy);
+                if (!GitUtils.IsGitInstalled())
+                    EditorUtility.DisplayDialog("Git Not Found", "Git is not installed or not found in PATH.", "OK");
+                else if (!GitUtils.IsGitRepository())
+                    EditorUtility.DisplayDialog("Not a Git Repository", "The current project is not a Git repository.", "OK");
+                else
+                    ShowPropertyHistoryInWindow(propertyCopy);
             });
         }
 
@@ -32,8 +34,7 @@ namespace PropertyHistoryTool
                 return;
             }
 
-            Debug.Log(
-                $"[PropertyHistory] AssetPath: {propertyData.AssetPath}, FileID: {propertyData.FileID}, PropertyPath: {propertyData.PropertyPath}");
+            Debug.Log($"[PropertyHistory] AssetPath: {propertyData.AssetPath}, FileID: {propertyData.FileID}, PropertyPath: {propertyData.PropertyPath}");
 
             // Open the Property History Window and load the property data
             var window = EditorWindow.GetWindow<PropertyHistoryWindow>("Property History");

@@ -11,15 +11,20 @@ namespace PropertyHistoryTool
         [InitializeOnLoadMethod]
         private static void Initialize()
         {
-            EditorApplication.contextualPropertyMenu += OnPropertyContextMenu;
+            // EditorApplication.contextualPropertyMenu += OnPropertyContextMenu;
         }
 
         private static void OnPropertyContextMenu(GenericMenu menu, SerializedProperty property)
         {
             var propertyCopy = property.Copy();
-            menu.AddItem(new GUIContent("Show Full Property Git History"), false, () =>
+            menu.AddItem(new GUIContent("Show Property History In Console"), false, () =>
             {
-                ShowPropertyHistory(propertyCopy);
+                if (!GitUtils.IsGitInstalled())
+                    Debug.LogWarning("Git is not installed or not found in PATH.");
+                else if (!GitUtils.IsGitRepository())
+                    Debug.LogWarning("The current project is not a Git repository.");
+                else
+                    ShowPropertyHistory(propertyCopy);
             });
         }
 
