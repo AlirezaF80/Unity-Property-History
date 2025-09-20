@@ -108,14 +108,7 @@ namespace PropertyHistoryTool
         {
             EditorGUILayout.LabelField("No property selected", EditorStyles.centeredGreyMiniLabel);
             EditorGUILayout.Space(5);
-            
-            if (GUILayout.Button("Load Property from Selection"))
-            {
-                LoadPropertyFromSelection();
-            }
-            
-            EditorGUILayout.Space(5);
-            EditorGUILayout.HelpBox("Select a property in the Inspector and click the button above, or right-click on any property and choose 'Show Full Property Git History'.", MessageType.Info);
+            EditorGUILayout.HelpBox("Select a property in the Inspector and click the button above, or right-click on any property and choose 'Show Property History'.", MessageType.Info);
         }
         
         private void DrawPropertyInfoSection()
@@ -127,14 +120,6 @@ namespace PropertyHistoryTool
             EditorGUILayout.LabelField($"Asset: {currentPropertyData.AssetPath}");
             EditorGUILayout.LabelField($"Property Path: {currentPropertyData.PropertyPath}");
             EditorGUILayout.LabelField($"File ID: {currentPropertyData.FileID}");
-            
-            EditorGUILayout.Space(5);
-            
-            if (GUILayout.Button("Load Different Property"))
-            {
-                currentPropertyData = null;
-                propertyHistory = null;
-            }
             
             EditorGUILayout.EndVertical();
         }
@@ -230,21 +215,6 @@ namespace PropertyHistoryTool
             
             EditorGUILayout.EndVertical();
             EditorGUILayout.Space(5);
-        }
-        
-        private void LoadPropertyFromSelection()
-        {
-            // Try to get the active property from the Inspector
-            var activeEditor = focusedWindow;
-            if (activeEditor == null || activeEditor.GetType().Name != "InspectorWindow")
-            {
-                errorMessage = "Please select a property in the Inspector first.";
-                return;
-            }
-            
-            // This is a simplified approach - in a real implementation, you might need
-            // to use reflection to access the Inspector's selected property
-            errorMessage = "Please right-click on a property in the Inspector and select 'Show Full Property Git History'.";
         }
         
         public void LoadPropertyData(PropertyData propertyData)
